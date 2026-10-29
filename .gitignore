@@ -1,0 +1,57 @@
+# ---- Secrets / environment ----
+.env
+.env.*
+!.env.example
+!.env.dev.example
+!.env.prod.example
+
+# ---- Node / Next.js ----
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/.turbo/
+frontend/.vercel/
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+frontend/pnpm-debug.log*
+
+# ---- Python ----
+backend/__pycache__/
+backend/**/*.pyc
+backend/**/*.pyo
+backend/**/*.pyd
+backend/.pytest_cache/
+backend/.mypy_cache/
+backend/.ruff_cache/
+backend/.coverage
+backend/htmlcov/
+backend/.venv/
+backend/venv/
+
+# ---- Editor / OS ----
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ---- Logs / temp files ----
+*.log
+*.pid
+*.tmp
+*.bak
+
+# ---- Docker runtime leftovers ----
+**/.docker/
+
+# ---- Build / cache artifacts ----
+.cache/
+dist/
+build/
+coverage/
+
+# ---- Local smoke/config helpers ----
+.env.prod.check

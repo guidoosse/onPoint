@@ -1,0 +1,89 @@
+services:
+  postgres:
+    ports: []
+
+  mongo:
+    ports: []
+
+  redis:
+    ports: []
+
+  keycloak:
+    command: >-
+      start
+      --db=postgres
+      --db-url=${KEYCLOAK_DB_URL:?KEYCLOAK_DB_URL is required}
+      --db-username=${KEYCLOAK_DB_USER:?KEYCLOAK_DB_USER is required}
+      --db-password=${KEYCLOAK_DB_PASSWORD:?KEYCLOAK_DB_PASSWORD is required}
+      --hostname=${KEYCLOAK_HOSTNAME:?KEYCLOAK_HOSTNAME is required}
+      --hostname-strict=true
+      --proxy-headers=xforwarded
+    ports: []
+
+  backend:
+    environment:
+      APP_ENV: production
+      AUTH_ENABLED: ${AUTH_ENABLED:-true}
+      KEYCLOAK_AUDIENCE: ${KEYCLOAK_AUDIENCE:?KEYCLOAK_AUDIENCE is required}
+      KEYCLOAK_ISSUER: ${KEYCLOAK_ISSUER:?KEYCLOAK_ISSUER is required}
+      KEYCLOAK_JWKS_URL: ${KEYCLOAK_JWKS_URL:?KEYCLOAK_JWKS_URL is required}
+      KEYCLOAK_REQUIRED_ROLES: ${KEYCLOAK_REQUIRED_ROLES:-portal_user}
+      MEILI_HOST: ${MEILI_HOST:-http://meilisearch:7700}
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:?MEILI_MASTER_KEY is required}
+      MEILI_INDEX: ${MEILI_INDEX:-portal_services}
+      AZURE_OPENAI_API_KEY: ${AZURE_OPENAI_API_KEY:-}
+      AZURE_OPENAI_ENDPOINT: ${AZURE_OPENAI_ENDPOINT:-}
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers ${BACKEND_WORKERS:-2}
+    volumes: []
+    ports: []
+
+  frontend:
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?NEXT_PUBLIC_API_URL is required}
+      NEXT_PUBLIC_KEYCLOAK_URL: ${NEXT_PUBLIC_KEYCLOAK_URL:?NEXT_PUBLIC_KEYCLOAK_URL is required}
+      FRONTEND_AUTH_ENABLED: ${FRONTEND_AUTH_ENABLED:-true}
+      NEXTAUTH_URL: ${NEXTAUTH_URL:?NEXTAUTH_URL is required}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:?NEXTAUTH_SECRET is required}
+      KEYCLOAK_FRONTEND_CLIENT_ID: ${KEYCLOAK_FRONTEND_CLIENT_ID:?KEYCLOAK_FRONTEND_CLIENT_ID is required}
+      KEYCLOAK_FRONTEND_CLIENT_SECRET: ${KEYCLOAK_FRONTEND_CLIENT_SECRET:?KEYCLOAK_FRONTEND_CLIENT_SECRET is required}
+      KEYCLOAK_FRONTEND_ISSUER: ${KEYCLOAK_FRONTEND_ISSUER:?KEYCLOAK_FRONTEND_ISSUER is required}
+    ports: []
+
+  n8n:
+    ports: []
+
+  vikunja:
+    environment:
+      VIKUNJA_SERVICE_PUBLICURL: ${VIKUNJA_SERVICE_PUBLICURL:?VIKUNJA_SERVICE_PUBLICURL is required}
+    ports: []
+
+  outline:
+    environment:
+      URL: ${OUTLINE_URL:?OUTLINE_URL is required}
+      FORCE_HTTPS: "true"
+    ports: []
+
+  open-webui:
+    ports: []
+
+  meilisearch:
+    environment:
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:?MEILI_MASTER_KEY is required}
+      MEILI_ENV: production
+    ports: []
+
+  appsmith:
+    ports: []
+
+  gotify:
+    ports: []
+
+  stirling-pdf:
+    ports: []
+
+  nocodb:
+    environment:
+      NC_DB: ${NOCODB_DB:?NOCODB_DB is required}
+      NC_AUTH_JWT_SECRET: ${NOCODB_AUTH_JWT_SECRET:?NOCODB_AUTH_JWT_SECRET is required}
+      NC_PUBLIC_URL: ${NOCODB_PUBLIC_URL:?NOCODB_PUBLIC_URL is required}
+    ports: []

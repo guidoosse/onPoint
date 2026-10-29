@@ -1,0 +1,262 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: onpoint-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-onpoint}
+      POSTGRES_USER: ${POSTGRES_USER:-onpoint}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mongo:
+    image: mongo:7
+    container_name: onpoint-mongo
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_DATABASE: onpoint
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:24.0
+    container_name: onpoint-keycloak
+    command: start-dev --db=postgres --db-url=${KEYCLOAK_DB_URL:-jdbc:postgresql://postgres:5432/onpoint} --db-username=${KEYCLOAK_DB_USER:-onpoint} --db-password=${KEYCLOAK_DB_PASSWORD:-change_me} --hostname-strict=false
+    environment:
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-change_me}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+
+  redis:
+    image: redis:7-alpine
+    container_name: onpoint-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: onpoint-backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: ${BACKEND_DATABASE_URL:-postgresql://onpoint:change_me@postgres:5432/onpoint?schema=public}
+      MONGODB_URI: ${MONGODB_URI:-mongodb://mongo:27017/onpoint}
+      KEYCLOAK_URL: http://keycloak:8080
+      AUTH_ENABLED: ${AUTH_ENABLED:-true}
+      KEYCLOAK_AUDIENCE: ${KEYCLOAK_AUDIENCE:-onpoint-backend}
+      KEYCLOAK_ISSUER: ${KEYCLOAK_ISSUER:-http://keycloak:8080/realms/onpoint}
+      KEYCLOAK_JWKS_URL: ${KEYCLOAK_JWKS_URL:-http://keycloak:8080/realms/onpoint/protocol/openid-connect/certs}
+      KEYCLOAK_REQUIRED_ROLES: ${KEYCLOAK_REQUIRED_ROLES:-portal_user}
+      MEILI_HOST: ${MEILI_HOST:-http://meilisearch:7700}
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-change_meilisearch_master_key}
+      MEILI_INDEX: ${MEILI_INDEX:-portal_services}
+      AZURE_OPENAI_API_KEY: ${AZURE_OPENAI_API_KEY:-}
+      AZURE_OPENAI_ENDPOINT: ${AZURE_OPENAI_ENDPOINT:-}
+      APP_ENV: development
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongo:
+        condition: service_started
+      keycloak:
+        condition: service_started
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: onpoint-frontend
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_API_URL: http://backend:8000
+      NEXT_PUBLIC_KEYCLOAK_URL: http://keycloak:8080
+      FRONTEND_AUTH_ENABLED: ${FRONTEND_AUTH_ENABLED:-true}
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3005}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-replace_with_long_random_secret}
+      KEYCLOAK_FRONTEND_CLIENT_ID: ${KEYCLOAK_FRONTEND_CLIENT_ID:-onpoint-frontend}
+      KEYCLOAK_FRONTEND_CLIENT_SECRET: ${KEYCLOAK_FRONTEND_CLIENT_SECRET:-replace_with_frontend_client_secret}
+      KEYCLOAK_FRONTEND_ISSUER: ${KEYCLOAK_FRONTEND_ISSUER:-http://localhost:8080/realms/onpoint}
+    depends_on:
+      - backend
+    ports:
+      - "3005:3000"
+
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: onpoint-n8n
+    restart: unless-stopped
+    environment:
+      DB_TYPE: ${N8N_DB_TYPE:-postgresdb}
+      DB_POSTGRESDB_HOST: ${N8N_DB_HOST:-postgres}
+      DB_POSTGRESDB_PORT: ${N8N_DB_PORT:-5432}
+      DB_POSTGRESDB_DATABASE: ${N8N_DB_NAME:-onpoint}
+      DB_POSTGRESDB_USER: ${N8N_DB_USER:-onpoint}
+      DB_POSTGRESDB_PASSWORD: ${N8N_DB_PASSWORD:-change_me}
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:-change_me}
+      GENERIC_TIMEZONE: ${GENERIC_TIMEZONE:-Europe/London}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "5678:5678"
+    volumes:
+      - n8n_data:/home/node/.n8n
+
+  vikunja:
+    image: vikunja/vikunja
+    container_name: onpoint-vikunja
+    restart: unless-stopped
+    user: "0:0"
+    environment:
+      VIKUNJA_SERVICE_SECRET: ${VIKUNJA_SERVICE_SECRET:-8f1d7a0c93d8e2f5d1f15b8b2d8c4a3e}
+      VIKUNJA_SERVICE_PUBLICURL: ${VIKUNJA_SERVICE_PUBLICURL:-http://localhost:3456}
+      VIKUNJA_SERVICE_ROOTPATH: /
+      VIKUNJA_DATABASE_TYPE: ${VIKUNJA_DB_TYPE:-postgres}
+      VIKUNJA_DATABASE_HOST: ${VIKUNJA_DB_HOST:-postgres}
+      VIKUNJA_DATABASE_PORT: ${VIKUNJA_DB_PORT:-5432}
+      VIKUNJA_DATABASE_USER: ${VIKUNJA_DB_USER:-onpoint}
+      VIKUNJA_DATABASE_PASSWORD: ${VIKUNJA_DB_PASSWORD:-change_me}
+      VIKUNJA_DATABASE_NAME: ${VIKUNJA_DB_NAME:-vikunja}
+      VIKUNJA_CORS_ENABLE: "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "3456:3456"
+    volumes:
+      - vikunja_data:/files
+
+  outline:
+    image: outlinewiki/outline:latest
+    container_name: onpoint-outline
+    restart: unless-stopped
+    environment:
+      HOST: 0.0.0.0
+      PORT: 3000
+      DATABASE_URL: ${OUTLINE_DATABASE_URL:-postgres://onpoint:change_me@postgres:5432/outline?sslmode=disable}
+      PGSSLMODE: disable
+      SECRET_KEY: ${OUTLINE_SECRET_KEY:-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}
+      UTILS_SECRET: ${OUTLINE_UTILS_SECRET:-abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789}
+      REDIS_URL: redis://redis:6379
+      URL: ${OUTLINE_URL:-http://localhost:3000}
+      FORCE_HTTPS: "false"
+      NODE_ENV: production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    ports:
+      - "3000:3000"
+    volumes:
+      - outline_data:/var/lib/outline
+
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: onpoint-openwebui
+    restart: unless-stopped
+    environment:
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+    ports:
+      - "3002:8080"
+    volumes:
+      - openwebui_data:/app/backend/data
+
+  meilisearch:
+    image: getmeili/meilisearch:latest
+    container_name: onpoint-meilisearch
+    restart: unless-stopped
+    environment:
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-change_meilisearch_master_key}
+      MEILI_ENV: production
+    ports:
+      - "7700:7700"
+    volumes:
+      - meilisearch_data:/meili_data
+
+  appsmith:
+    image: appsmith/appsmith-ce:latest
+    container_name: onpoint-appsmith
+    restart: unless-stopped
+    environment:
+      APPSMITH_DISABLE_TELEMETRY: "true"
+      APPSMITH_ENCRYPTION_PASSWORD: ${APPSMITH_ENCRYPTION_PASSWORD:-change_appsmith_encryption_password}
+    ports:
+      - "8085:80"
+    volumes:
+      - appsmith_data:/appsmith-stacks
+
+  gotify:
+    image: gotify/server:latest
+    container_name: onpoint-gotify
+    restart: unless-stopped
+    environment:
+      GOTIFY_DEFAULTUSER_NAME: ${GOTIFY_DEFAULTUSER_NAME:-admin}
+      GOTIFY_DEFAULTUSER_PASS: ${GOTIFY_DEFAULTUSER_PASS:-change_gotify_password}
+    ports:
+      - "8086:80"
+    volumes:
+      - gotify_data:/app/data
+
+  stirling-pdf:
+    image: stirlingtools/stirling-pdf:latest
+    container_name: onpoint-stirling-pdf
+    restart: unless-stopped
+    environment:
+      DOCKER_ENABLE_SECURITY: "true"
+      LANGS: en_GB
+    ports:
+      - "8087:8080"
+    volumes:
+      - stirling_data:/usr/share/tessdata
+
+  nocodb:
+    image: nocodb/nocodb:latest
+    container_name: onpoint-nocodb
+    restart: unless-stopped
+    environment:
+      NC_DB: ${NOCODB_DB:-pg://postgres:5432?u=onpoint&p=change_me&d=onpoint}
+      NC_AUTH_JWT_SECRET: ${NOCODB_AUTH_JWT_SECRET:-change_nocodb_jwt_secret}
+      NC_PUBLIC_URL: ${NOCODB_PUBLIC_URL:-http://localhost:8088}
+      NC_DISABLE_TELE: "true"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8088:8080"
+    volumes:
+      - nocodb_data:/usr/app/data
+
+volumes:
+  postgres_data:
+  mongo_data:
+  n8n_data:
+  outline_data:
+  openwebui_data:
+  vikunja_data:
+  meilisearch_data:
+  appsmith_data:
+  gotify_data:
+  stirling_data:
+  nocodb_data:
