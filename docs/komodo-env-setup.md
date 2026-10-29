@@ -41,6 +41,13 @@ This override:
 - removes host port exposure for internal services
 - removes backend source bind mount and disables reload mode
 - requires critical auth/search vars to be set
+- attaches proxy-facing services to external Docker network `nginx_default`
+
+If your reverse-proxy stack uses network `nginx_default`, ensure it exists before deploy:
+
+```bash
+docker network create nginx_default || true
+```
 
 ## 4) Current optional component status
 
