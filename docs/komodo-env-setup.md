@@ -24,6 +24,21 @@ Use Docker Compose with a dedicated env file per environment.
 
 ## 3) Startup
 
+For a Git-based Komodo deployment, create a Stack from this repository and use
+`docker-compose.yml` as the Compose file. For production, include
+`docker-compose.prod.yml` as the second Compose file. Set the variables from
+`.env.prod.example` in Komodo's environment/secret settings; do not commit a
+populated `.env` file. The backend and frontend images build directly from the
+tracked Dockerfiles in the repository, and the other services use their
+upstream container images. Compose also builds a database bootstrap image from
+`database-init/`; it creates the Outline and Vikunja databases idempotently,
+including when the Postgres data volume already exists. No host-side init
+script or manual image build is required.
+
+The production override joins proxy-facing services to the external Docker
+network `nginx_default`. Ensure the reverse-proxy stack creates that network on
+the same Docker host before deploying this stack.
+
 Run in the project root:
 
 ```bash
